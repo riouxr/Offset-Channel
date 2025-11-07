@@ -1,11 +1,11 @@
 schema_version = "1.0.0"
-id = "motionpath"
-version = "2.1.2"
-name = "Motion Path Creator"
-tagline = "Create motion paths for bones, vertices, empties and objects"
+id = "Channel Offset"
+version = "1.0.0"
+name = "Channel Offset"
+tagline = "Offsets all the keyframes on a channel"
 maintainer = "Blender Bob"
 type = "add-on"
-website = "https://github.com/riouxr/Motionpath"
+website = "https://github.com/riouxr/Curve-Offset"
 tags = ["Animation"]
 blender_version_min = "4.2.0"
 license = ["SPDX:GPL-3.0-or-later"]
