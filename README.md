@@ -1,0 +1,1 @@
+This Blender extension located in the Animation tab for the N Panel allows you to offset the animation curves. It's like moving the whole curve in Y in the curve editor. It supports bones, objects and shapekeys
