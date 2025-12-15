@@ -338,7 +338,7 @@ def selection_update_handler(scene, depsgraph):
 # ============================================================
 
 class ANIM_PT_offset_panel(bpy.types.Panel):
-    bl_label = "Universal Animation Offset"
+    bl_label = "BB Offset Chanels"
     bl_idname = "ANIM_PT_universal_offset"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
