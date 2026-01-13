@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Universal Animation Offset (Stable + TX RX SX)",
     "author": "Robert Rioux + ChatGPT",
-    "version": (6, 2),
+    "version": (6, 4),
     "blender": (4, 5, 0),
     "location": "View3D > Sidebar > Animation Tab",
     "description": "Offsets animation channels live using TX/RX/SX labels. Stable + slotted actions + constraints + shapekeys.",
@@ -29,15 +29,15 @@ def short_name(path, idx):
 
 
 # ============================================================
-# Slotted Actions helpers (Blender 4.4+)
+# Blender 5.0 Compatible Animation Iteration
 # ============================================================
 
 def iter_fcurves_from_animdata(animdata):
     """
     Yield F-Curves for this datablock's AnimData.
     Supports:
-      - legacy: action.fcurves
-      - slotted actions: action.layers[*].strips[*].channelbags[*].fcurves filtered by animdata.action_slot_handle
+      - Blender 4.x: action.fcurves
+      - Blender 5.0+: action.layers[*].strips[*].channelbags[*].fcurves
     """
     if not animdata:
         return
@@ -45,44 +45,42 @@ def iter_fcurves_from_animdata(animdata):
     if not action:
         return
 
-    # --- Legacy API path (works when action.fcurves is available & populated)
-    fcurves = getattr(action, "fcurves", None)
-    if fcurves is not None:
-        # In slotted actions, this legacy collection may exist but be empty/wrong-slot.
-        # We only trust it if it actually contains curves.
-        try:
-            if len(fcurves) > 0:
-                for fc in fcurves:
-                    yield fc
-                return
-        except Exception:
-            # Fall back to slotted path
-            pass
-
-    # --- Slotted Actions path
-    handle = getattr(animdata, "action_slot_handle", 0)
-
+    # --- Check if this is Blender 5.0+ layered animation system
     layers = getattr(action, "layers", None)
-    if not layers:
+    if layers is not None:
+        # Blender 5.0+ path - iterate through channelbags
+        # Get the slot handle if it exists (for multi-slot actions)
+        handle = getattr(animdata, "action_slot_handle", None)
+        
+        for layer in action.layers:
+            strips = getattr(layer, "strips", None)
+            if not strips:
+                continue
+            for strip in layer.strips:
+                channelbags = getattr(strip, "channelbags", None)
+                if not channelbags:
+                    continue
+                for cb in strip.channelbags:
+                    # Only filter by slot_handle if:
+                    # 1. The animdata has a slot_handle attribute (not all do)
+                    # 2. The channelbag has a slot_handle attribute
+                    # 3. They don't match
+                    cb_handle = getattr(cb, "slot_handle", None)
+                    if handle is not None and cb_handle is not None and cb_handle != handle:
+                        continue
+                    
+                    cb_fcurves = getattr(cb, "fcurves", None)
+                    if not cb_fcurves:
+                        continue
+                    for fc in cb_fcurves:
+                        yield fc
         return
 
-    for layer in action.layers:
-        strips = getattr(layer, "strips", None)
-        if not strips:
-            continue
-        for strip in layer.strips:
-            channelbags = getattr(strip, "channelbags", None)
-            if not channelbags:
-                continue
-            for cb in strip.channelbags:
-                cb_handle = getattr(cb, "slot_handle", 0)
-                if cb_handle != handle:
-                    continue
-                cb_fcurves = getattr(cb, "fcurves", None)
-                if not cb_fcurves:
-                    continue
-                for fc in cb_fcurves:
-                    yield fc
+    # --- Blender 4.x legacy path
+    fcurves = getattr(action, "fcurves", None)
+    if fcurves is not None:
+        for fc in fcurves:
+            yield fc
 
 
 def _iter_matching_fcurves(animdata, data_path, index):
@@ -125,7 +123,15 @@ def gather_channels(context):
                         bone_end = end
                         if context.mode == 'POSE' and obj.type == 'ARMATURE':
                             try:
-                                bone_selected = obj.pose.bones[bone_name].bone.select
+                                pose_bone = obj.pose.bones[bone_name]
+                                # Blender 5.0+ compatibility
+                                if hasattr(pose_bone.bone, 'select'):
+                                    bone_selected = pose_bone.bone.select
+                                elif hasattr(pose_bone, 'bone') and hasattr(pose_bone.bone, 'select_get'):
+                                    bone_selected = pose_bone.bone.select_get()
+                                else:
+                                    # Fallback: check if in selected_pose_bones
+                                    bone_selected = pose_bone in context.selected_pose_bones
                             except KeyError:
                                 bone_selected = False
 
@@ -284,7 +290,19 @@ def poll_selection_timer():
         sel_bones = []
         for o in context.selected_objects:
             if o.type == 'ARMATURE':
-                sel_bones.extend([b.name for b in o.pose.bones if b.bone.select])
+                for b in o.pose.bones:
+                    # Blender 5.0+ compatibility
+                    is_selected = False
+                    if hasattr(b.bone, 'select'):
+                        is_selected = b.bone.select
+                    elif hasattr(b.bone, 'select_get'):
+                        is_selected = b.bone.select_get()
+                    else:
+                        # Fallback: check if in selected_pose_bones
+                        is_selected = b in context.selected_pose_bones
+                    
+                    if is_selected:
+                        sel_bones.append(b.name)
         sel_bones.sort()
         hash_str += ";" + ",".join(sel_bones)
 
